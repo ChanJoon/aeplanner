@@ -20,7 +20,7 @@ def sqexpkernel(x1, x2, hyperparam):
     return K
 
 def gp(y, x, xstar, hyperparam, kernel):
-    if(y.shape[0] is 0 or x.shape[0] is 0):
+    if(y.shape[0] == 0 or x.shape[0] == 0):
         return (np.empty((0)), np.empty((0)))
 
     K     = kernel(x, x, hyperparam)            # K(x,x)

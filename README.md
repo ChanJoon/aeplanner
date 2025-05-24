@@ -1,3 +1,12 @@
+
+```bash
+roslaunch rpl_exploration rpl_exploration.launch
+roslaunch exploration_eval marsim_run.launch
+rviz -d src/aeplanner/aeplanner_world.rviz
+```
+
+---
+
 # Autonomous Exploration Planner - aeplanner
 
 aeplanner is an exploration planning package for 3d environments. It subscribes to an [OctoMap](https://octomap.github.io/) and will propose waypoints that maximizes the information gain while minimizing the traversed distance. For a more detailed description see our paper.
