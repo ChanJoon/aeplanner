@@ -1,4 +1,5 @@
 #include <fstream>
+#include <string>
 
 #include <ros/package.h>
 #include <ros/ros.h>
@@ -18,10 +19,14 @@
 #include <nav_msgs/Path.h>
 #include <tf2/utils.h>
 
+#include <quadrotor_msgs/PositionCommand.h>
+
 int main(int argc, char** argv)
 {
   ros::init(argc, argv, "exploration");
   ros::NodeHandle nh;
+  std::string frame_id_;
+  nh.param<std::string>("frame_id", frame_id_, "map");
   ROS_INFO("Started exploration");
 
   // Open logfile;
@@ -30,9 +35,7 @@ int main(int argc, char** argv)
   logfile.open(path + "/data/logfile.csv");
   pathfile.open(path + "/data/path.csv");
 
-  ros::Publisher pub(nh.advertise<geometry_msgs::PoseStamped>("/mavros/"
-                                                              "setpoint_position/"
-                                                              "local",
+  ros::Publisher pub(nh.advertise<quadrotor_msgs::PositionCommand>("/quad_0/planning/pos_cmd",
                                                               1000));
 
   ros::ServiceClient coverage_srv =
@@ -59,8 +62,7 @@ int main(int argc, char** argv)
 
   // Get current pose
   geometry_msgs::PoseStamped::ConstPtr init_pose =
-      ros::topic::waitForMessage<geometry_msgs::PoseStamped>("/mavros/"
-                                                             "local_position/pose");
+      ros::topic::waitForMessage<geometry_msgs::PoseStamped>("/quad0_odom_visualization/pose");
   double init_yaw = tf2::getYaw(init_pose->pose.orientation);
   // Up 2 meters and then forward one meter
   double initial_positions[8][4] = {
@@ -104,13 +106,17 @@ int main(int argc, char** argv)
     aeplanner::aeplannerGoal aep_goal;
     aep_goal.header.stamp = ros::Time::now();
     aep_goal.header.seq = iteration;
-    aep_goal.header.frame_id = "map";
+    aep_goal.header.frame_id = frame_id_;
     aep_goal.actions_taken = actions_taken;
     aep_ac.sendGoal(aep_goal);
 
     while (!aep_ac.waitForResult(ros::Duration(0.05)))
     {
-      pub.publish(last_pose);
+      quadrotor_msgs::PositionCommand cmd;
+      cmd.position.x = last_pose.pose.position.x;
+      cmd.position.y = last_pose.pose.position.y;
+      cmd.position.z = last_pose.pose.position.z;
+      pub.publish(cmd);
     }
 
     ros::Duration fly_time;
@@ -137,7 +143,7 @@ int main(int argc, char** argv)
     {
       rrtplanner::rrtGoal rrt_goal;
       rrt_goal.start.header.stamp = ros::Time::now();
-      rrt_goal.start.header.frame_id = "map";
+      rrt_goal.start.header.frame_id = frame_id_;
       rrt_goal.start.pose = last_pose.pose;
       if (!aep_ac.getResult()->frontiers.poses.size())
       {
@@ -153,7 +159,11 @@ int main(int argc, char** argv)
       rrt_ac.sendGoal(rrt_goal);
       while (!rrt_ac.waitForResult(ros::Duration(0.05)))
       {
-        pub.publish(last_pose);
+        quadrotor_msgs::PositionCommand cmd;
+        cmd.position.x = last_pose.pose.position.x;
+        cmd.position.y = last_pose.pose.position.y;
+        cmd.position.z = last_pose.pose.position.z;
+        pub.publish(cmd);
       }
       nav_msgs::Path path = rrt_ac.getResult()->path;
 

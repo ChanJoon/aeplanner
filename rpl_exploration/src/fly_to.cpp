@@ -3,6 +3,7 @@
 
 #include <ros/ros.h>
 #include <tf/transform_listener.h>
+#include <quadrotor_msgs/PositionCommand.h>
 
 namespace rpl_exploration {
   class FlyTo
@@ -10,15 +11,19 @@ namespace rpl_exploration {
     private:
       ros::NodeHandle nh_;
       ros::Publisher pub_;
+      ros::Publisher marsim_cmd_pub_;
       actionlib::SimpleActionServer<rpl_exploration::FlyToAction> as_;
 
       tf::TransformListener listener;
+      std::string frame_id_;
     public:
       FlyTo() : pub_(nh_.advertise<geometry_msgs::PoseStamped>("fly_to_cmd", 1000)),
-                as_(nh_, "fly_to", boost::bind(&FlyTo::execute, this, _1, &as_), false)
+                as_(nh_, "fly_to", boost::bind(&FlyTo::execute, this, _1, &as_), false),
+                marsim_cmd_pub_(nh_.advertise<quadrotor_msgs::PositionCommand>("/quad_0/planning/pos_cmd", 1000))
       {
         ROS_INFO("Starting fly to server");
         as_.start();
+        nh_.param<std::string>("frame_id", frame_id_, "map");
       }
       void execute(const rpl_exploration::FlyToGoalConstPtr& goal, 
                    actionlib::SimpleActionServer<rpl_exploration::FlyToAction> * as)
@@ -51,9 +56,15 @@ namespace rpl_exploration {
         {
           ROS_INFO_STREAM("Publishing goal to (" << p.x << ", " << p.y << ", " << p.z << ") ");
           pub_.publish(goal->pose);
+          quadrotor_msgs::PositionCommand cmd;
+          cmd.header.stamp = ros::Time::now();
+          cmd.position.x = p.x;
+          cmd.position.y = p.y;
+          cmd.position.z = p.z;
+          marsim_cmd_pub_.publish(cmd);
 
-          listener.waitForTransform("/map", "/base_link", ros::Time(0), ros::Duration(10.0) );
-          listener.lookupTransform("/map", "/base_link", ros::Time(0), transform);
+          listener.waitForTransform(frame_id_, "/base_link", ros::Time(0), ros::Duration(10.0) );
+          listener.lookupTransform(frame_id_, "/base_link", ros::Time(0), transform);
 
           geometry_msgs::Point q;
           q.x = (float)transform.getOrigin().x(); 
@@ -81,7 +92,7 @@ namespace rpl_exploration {
           yaw_diff = fabs(atan2(sin(goal_yaw-current_yaw), cos(goal_yaw-current_yaw)));
 
           r.sleep();
-        } while(distance_to_goal > 0.8 or yaw_diff > 0.6*M_PI);
+        } while(distance_to_goal > 0.8);
 
 
         as->setSucceeded();
